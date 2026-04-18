@@ -33,7 +33,7 @@ def watershed_Segmentation(input_Folder, output_Folder):
             #Normalize
             cv2.normalize(dist_Transform, dist_Transform, 0, 1.0, cv2.NORM_MINMAX)
             
-            ret, sure_Foreground = cv2.threshold(dist_Transform, 0.3, 1.0, cv2.THRESH_BINARY)
+            ret, sure_Foreground = cv2.threshold(dist_Transform, 0.5, 1.0, cv2.THRESH_BINARY)
             # bilinmeyen bölge, kesin arka plan ile kesin ön plan arasındaki bölgeye göre sınırı belirler
             sure_Foreground = np.uint8(sure_Foreground * 255)
 

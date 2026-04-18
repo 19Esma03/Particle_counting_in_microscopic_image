@@ -21,7 +21,7 @@ for file_Name in os.listdir(input_Folder):
         clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8, 8))
         contrast_Increased_Image = clahe.apply(median)
         # kontrast artırmadan dolayı oluşan tuz biber gürültüsü için tekrardan median filtresi
-        median2 = cv2.medianBlur(contrast_Increased_Image, 51)
+        median2 = cv2.medianBlur(contrast_Increased_Image, 31)
         # parlaklığı azaltmak için çıkarma
         substracted_Image = cv2.subtract(contrast_Increased_Image, median2)
 

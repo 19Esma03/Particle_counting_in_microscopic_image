@@ -27,7 +27,7 @@ def counter():
             contour = contours[0]
             area = cv2.contourArea(contour)
 
-            if area < 150:  
+            if area < 200:
                 continue
 
             perimeter = cv2.arcLength(contour, True)
@@ -36,7 +36,7 @@ def counter():
             if perimeter == 0:
                 continue
 
-            if circularity < 0.5:
+            if circularity < 0.65:
                 continue
 
             count += 1

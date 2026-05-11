@@ -8,15 +8,39 @@ SEGMENTED_FOLDER = "segmented_data"
 ANOMALY_THRESHOLD = 2.5
 
 
+
 def analyze_image(npy_path):
+
     markers = np.load(npy_path)
+
+    # tüm label'lar
     unique_labels = np.unique(markers)
+
+    # gerçek hücre label'ları
     cell_labels = unique_labels[unique_labels > 1]
+
+    # minimum hücre alanı
+    MIN_CELL_AREA = 40
+
+    filtered_labels = []
+    areas = []
+
+    # küçük gürültüleri filtrele
+    for label in cell_labels:
+
+        area = np.sum(markers == label)
+
+        if area >= MIN_CELL_AREA:
+            filtered_labels.append(label)
+            areas.append(area)
+
+    # filtrelenmiş hücreler
+    cell_labels = filtered_labels
+
+    # hücre sayısı
     cell_count = len(cell_labels)
-    areas = [np.sum(markers == label) for label in cell_labels]
-    return cell_count, cell_labels, areas  # ← cell_labels eklendi
 
-
+    return cell_count, cell_labels, areas
 def find_anomalies(cell_labels,areas, threshold=ANOMALY_THRESHOLD):
     if len(areas) < 2:
         return []
@@ -42,7 +66,7 @@ def visualize(npy_path):
     image = cv2.imread(tif_path)
 
     if image is None:
-        print(f"  ⚠️  Görüntü okunamadı: {tif_path}")
+        print(f"Görüntü okunamadı: {tif_path}")
         return
 
     unique_labels = np.unique(markers)
@@ -57,7 +81,7 @@ def visualize(npy_path):
         mean, std = 0, 0
 
     for label, area in zip(cell_labels, areas):
-        mask = np.uint8(markers == label)
+        mask = np.uint8(markers == label) * 255
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # Anormal segment → kırmızı, normal → yeşil
@@ -91,6 +115,24 @@ def evaluate():
     for npy_path in files:
         file_name = npy_path.split("/")[-1].replace(".npy", ".tif")
         cell_count, cell_labels, areas = analyze_image(npy_path)
+        
+        corrected_count = cell_count
+
+        mean_area = np.mean(areas)
+
+        for area in areas:
+
+            ratio = area / mean_area
+
+            # sadece gerçekten büyük segmentlerde
+            if ratio >= 2.0:
+
+                estimated_cells = int(ratio)
+
+                # mevcut 1 count vardı
+                # ekstra hücreleri ekle
+                corrected_count += (estimated_cells - 1)
+        
         anomalies = find_anomalies(cell_labels, areas)
 
         all_counts.append(cell_count)
@@ -98,19 +140,19 @@ def evaluate():
 
         mean_area = np.mean(areas) if areas else 0
         std_area = np.std(areas) if areas else 0
-        anomaly_flag = f"⚠️  {len(anomalies)}" if anomalies else "✓  0"
+        anomaly_flag = f" {len(anomalies)}" if anomalies else "  0"
 
-        print(f"{file_name:<20} {cell_count:>6} {mean_area:>10.1f} {std_area:>8.1f} {anomaly_flag:>8}")
+        print(f"{file_name:<20} {corrected_count:>6} {mean_area:>10.1f} {std_area:>8.1f} {anomaly_flag:>8}")
 
         for label, area, reason in anomalies:
-            print(f"    └─ Label {label}: {area}px² → {reason}")
+            print(f"  Label {label}: {area}px² → {reason}")
 
     print("=" * 55)
 
     if len(all_counts) > 1:
         count_mean = np.mean(all_counts)
         count_std = np.std(all_counts)
-        consistency = "tutarlı ✓" if count_std < count_mean * 0.3 else "tutarsız "
+        consistency = "tutarlı " if count_std < count_mean * 0.3 else "tutarsız "
 
         print(f"\n GENEL ÖZET")
         print(f"  Toplam görüntü        : {len(files)}")
@@ -118,7 +160,7 @@ def evaluate():
         print(f"  Hücre sayısı std      : {count_std:.1f}  ({consistency})")
         print(f"  Toplam anormal segment: {total_anomalies}")
 
-    print("\n🔍 Görsel kontrol başlıyor... (her görüntü için bir tuşa basın)")
+    print("\nGörsel kontrol başlıyor... (her görüntü için bir tuşa basın)")
     for npy_path in files:
         visualize(npy_path)
 

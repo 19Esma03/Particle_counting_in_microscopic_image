@@ -1,61 +1,151 @@
+# =========================
+# segmentation.py
+# =========================
+
 import cv2
 import os
 import numpy as np
 
 def watershed_Segmentation(input_Folder, output_Folder):
 
+    # output klasörü oluştur
     if not os.path.exists(output_Folder):
         os.makedirs(output_Folder)
-    
 
+    # klasördeki tüm tif dosyaları
     for file_Name in os.listdir(input_Folder):
-        if file_Name.endswith(".tif"):
-            image_Path=os.path.join(input_Folder, file_Name)
 
-            image=cv2.imread(image_Path)
+        if file_Name.endswith(".tif"):
+
+            image_Path = os.path.join(input_Folder, file_Name)
+
+            # görüntüyü oku
+            image = cv2.imread(image_Path)
+
+            if image is None:
+                print(f"Görüntü okunamadı: {file_Name}")
+                continue
+
+            # grayscale
             gray_Image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-            ret, thresh_Otsu = cv2.threshold(gray_Image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            # OTSU threshold
+            ret, thresh_Otsu = cv2.threshold(
+                gray_Image,
+                0,
+                255,
+                cv2.THRESH_BINARY + cv2.THRESH_OTSU
+            )
 
-            # kernel tanımlama
-            kernel=np.ones((3,3), np.uint8)
-            
-            # gürültü temizleme, çok küçük beyaz pikselleri temizler
-            cleaned_Image=cv2.morphologyEx(thresh_Otsu, cv2.MORPH_OPEN, kernel, iterations=2)
-            # hücre doldurma, hücrelerin içinde küçük siyahlıklar varsa oraları doldurur
-            filled_Image=cv2.morphologyEx(cleaned_Image, cv2.MORPH_CLOSE, kernel, iterations=1)
+            # kernel
+            kernel = np.ones((3,3), np.uint8)
 
-            # kesin arka plan, boşlukları bulmak için
-            sure_Background = cv2.dilate(filled_Image, kernel, iterations=3)
+            # Gürültü temizleme
+            cleaned_Image = cv2.morphologyEx(
+                thresh_Otsu,
+                cv2.MORPH_OPEN,
+                kernel,
+                iterations=1
+            )
 
-            # kesin ön plan, birbirine değen hücrelerin merkezlerini bulmak için
-            dist_Transform = cv2.distanceTransform(filled_Image, cv2.DIST_L2, 5)
-            #Normalize
-            cv2.normalize(dist_Transform, dist_Transform, 0, 1.0, cv2.NORM_MINMAX)
-            
-            ret, sure_Foreground = cv2.threshold(dist_Transform, 0.5, 1.0, cv2.THRESH_BINARY)
-            # bilinmeyen bölge, kesin arka plan ile kesin ön plan arasındaki bölgeye göre sınırı belirler
-            sure_Foreground = np.uint8(sure_Foreground * 255)
+            # Hücre içlerini doldurma
+            filled_Image = cv2.morphologyEx(
+                cleaned_Image,
+                cv2.MORPH_CLOSE,
+                kernel,
+                iterations=1
+            )
 
-            sure_Foreground = cv2.erode(sure_Foreground, kernel, iterations=1)
+            # Kesin arka plan
+            sure_Background = cv2.dilate(
+                filled_Image,
+                kernel,
+                iterations=3
+            )
 
-            unknown=cv2.subtract(sure_Background,sure_Foreground)
+            # Distance transform
+            dist_Transform = cv2.distanceTransform(
+                filled_Image,
+                cv2.DIST_L2,
+                5
+            )
 
-            # her hücre merkezine etiket verme
-            ret, markers=cv2.connectedComponents(sure_Foreground)
-            # arka planı 1, bilinmeyen bölgeyi 0 yapma
-            markers=markers+1
+            # Kesin ön plan
+            ret, sure_Foreground = cv2.threshold(
+                dist_Transform,
+                0.5 * dist_Transform.max(),
+                255,
+                0
+            )
+
+            sure_Foreground = np.uint8(sure_Foreground)
+
+            # Bilinmeyen bölge
+            unknown = cv2.subtract(
+                sure_Background,
+                sure_Foreground
+            )
+
+            # Connected components
+            ret, markers = cv2.connectedComponents(
+                sure_Foreground
+            )
+
+            # Marker düzenleme
+            markers = markers + 1
             markers[unknown == 255] = 0
 
-            # watershed algoritması
-            colored_Image=cv2.cvtColor(gray_Image, cv2.COLOR_GRAY2BGR) # watershed için fotoğraf renkli yapıldı
-            markers=cv2.watershed(colored_Image, markers)
-            output_Path = os.path.join(output_Folder, file_Name)
-            colored_Image[markers == -1] = [0, 0, 255]  # kırmızı sınır çizmek için
+            # Watershed için renkli görüntü
+            colored_Image = cv2.cvtColor(
+                gray_Image,
+                cv2.COLOR_GRAY2BGR
+            )
 
-            np.save(output_Path.replace(".tif", ".npy"), markers)
+            # Watershed
+            markers = cv2.watershed(
+                colored_Image,
+                markers
+            )
 
-            cv2.imwrite(output_Path, colored_Image)
-            print(f"Processed and saved: {file_Name}")
+            # Watershed sınırları kırmızı
+            colored_Image[markers == -1] = [0, 0, 255]
 
-            # bir fotoğrafta bütün yöntemleri uygulayıp örnek olarak ekranda göstermek için
+            # output path
+            output_Path = os.path.join(
+                output_Folder,
+                file_Name
+            )
+
+            # markerları kaydet (.npy)
+            np.save(
+                output_Path.replace(".tif", ".npy"),
+                markers
+            )
+
+            # görüntüyü kaydet
+            cv2.imwrite(
+                output_Path,
+                colored_Image
+            )
+
+            print(f"İşlendi: {file_Name}")
+
+            # örnek görselleştirme
+            if file_Name == "1GRAY.tif":
+
+                cv2.imshow("Original", gray_Image)
+                cv2.waitKey(0)
+
+                cv2.imshow("OTSU", thresh_Otsu)
+                cv2.waitKey(0)
+
+                cv2.imshow("Sure Foreground", sure_Foreground)
+                cv2.waitKey(0)
+
+                cv2.imshow("Unknown Region", unknown)
+                cv2.waitKey(0)
+
+                cv2.imshow("Watershed Result", colored_Image)
+                cv2.waitKey(0)
+
+    cv2.destroyAllWindows()

@@ -1,47 +1,34 @@
-import cv2
+# =========================
+# counting.py
+# =========================
+
 import numpy as np
 import glob
 
-file_path ="segmented_data/*.npy"
-
 def counter():
+
+    file_path = "segmented_data/*.npy"
+
+    total_Count = 0
+
     for file in glob.glob(file_path):
 
-        markers = np.load(file)  
+        # marker yükle
+        markers = np.load(file)
 
-        unique_labels = np.unique(markers)
-        count = 0 
+        # benzersiz label'lar
+        labels = np.unique(markers)
 
-        image = cv2.imread(file.replace(".npy", ".tif"))
+        # hücre label'ları
+        # -1 = boundary
+        # 1 = background
+        cell_Labels = labels[labels > 1]
 
-        for label in unique_labels:
-            if label <= 1:
-                continue
+        # hücre sayısı
+        count = len(cell_Labels)
 
-            mask = np.uint8(markers == label)
-            
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if not contours:
-                continue
+        total_Count += count
 
-            contour = contours[0]
-            area = cv2.contourArea(contour)
+        print(f"{file} -> Cell Count: {count}")
 
-            if area < 200:
-                continue
-
-            perimeter = cv2.arcLength(contour, True)
-            circularity = 4 * np.pi * area / (perimeter * perimeter)
-
-            if perimeter == 0:
-                continue
-
-            if circularity < 0.65:
-                continue
-
-            count += 1
-            cv2.drawContours(image, [contour], -1, (0,255,0), 2)
-
-
-        cv2.imshow("Cells", image)
-        cv2.waitKey(0)
+    print(f"Toplam Hücre Sayısı: {total_Count}")
